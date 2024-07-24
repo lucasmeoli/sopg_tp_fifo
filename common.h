@@ -4,7 +4,7 @@
 #define FIFO_MODE               (0666) 
 
 
-#define INPUT_DATA_LENGHT       1000
+#define INPUT_DATA_LENGHT       10
 #define DATA_HEADER             "DATA"
 
 

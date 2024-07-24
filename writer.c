@@ -31,16 +31,17 @@ int main(void) {
     }
 
 
-    int fd = open(FIFO_NAME, O_WRONLY);
-    if (fd == -1) {
+    int fd_fifo = open(FIFO_NAME, O_WRONLY);
+    if (fd_fifo == -1) {
         perror("FIFO: open error");
         return 1;
     }
 
     char buf[INPUT_DATA_LENGHT];
     //char data[strlen(data_header) + INPUT_DATA_LENGHT];
+    ssize_t bytes_written;
 
-    while (1) {
+    do {
         char * p_error = fgets(buf, INPUT_DATA_LENGHT, stdin);
         if (p_error == NULL) {
             if (feof(stdin)) {
@@ -52,23 +53,21 @@ int main(void) {
         }
 
         char data[strlen(data_header) + strlen(buf) + 1];
-        /* chequear valores*/
+        // TODO:chequear valores
         // Copy DATA:
         strcpy(data, data_header);
         // Concatenar el contenido de buf después de "DATA:"
         strcat(data, buf);
-        int num;
+        printf("Palabra recibida: %s, bytes_Read: %ld\n", data, strlen(data));
+        bytes_written = write(fd_fifo, data, strlen(data));
 
-        if ((num = write(fd, data, strlen(data))) == -1) {
-            perror("Error writing");
-            close(fd);
-            return 1;
-        } else {
-            printf("Escritura correcta: %s", data);
-        }
+    } while (bytes_written > 0);
+
+    if (bytes_written == -1) {
+        perror("Error writing");
     }
 
-    close(fd);
+    close(fd_fifo);
 
     return 0;
 }

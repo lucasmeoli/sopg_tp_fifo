@@ -10,7 +10,7 @@
 
 
 #define OUTPUT_DATA_FILE    "log.txt"
-#define OUTPUT_DATA_MODE    0644
+#define OUTPUT_DATA_MODE    0666
 
 int main(void) {
 
@@ -43,25 +43,25 @@ int main(void) {
         return 1;
     }
 
-    char s[INPUT_DATA_LENGHT];
-    int num;
+    char buf[INPUT_DATA_LENGHT + 5];
+    ssize_t bytes_read;
+    ssize_t bytes_written;
 
-    while (1) {
-        if ((num = read(fd_fifo, s, INPUT_DATA_LENGHT)) == -1) {
-            perror("read");
-            break;
-        } else if(num == 0) {
-            break;
+    while ((bytes_read = read(fd_fifo, buf, INPUT_DATA_LENGHT+5-1)) > 0) {
+        // TODO: Es realmente necesario agregar el /0?
+        buf[bytes_read] = '\0';
+        printf("Palabra leida: %s, bytes_Read: %ld\n", buf, bytes_read);
+        if ((bytes_written = write(fd_out_data, buf+5, bytes_read-5)) == -1) {
+            perror("Error writing");
+            close(fd_out_data);
+            return 1;
         } else {
-            s[num] = '\0';
-            if ((num = write(fd_out_data, s, strlen(s))) == -1) {
-                perror("Error writing");
-                close(fd_out_data);
-                return 1;
-            } else {
-                printf("reader: write %d bytes: \"%s\"\n", num, s);
-            }
+            printf("reader: write %ld bytes: \"%s\"\n", bytes_read, buf);
         }
+    }
+
+    if (bytes_read == -1) {
+        perror("Read error");
     }
 
     close(fd_fifo);
