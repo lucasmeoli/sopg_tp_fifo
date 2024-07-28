@@ -1,3 +1,4 @@
+/********************** inclusions *******************************************/
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,32 +6,38 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-
 #include "common.h"
 
+/********************** macros and definitions *******************************/
 #define OUTPUT_DATA_FILE        "log.txt"
 #define OUTPUT_DATA_MODE        0666
 
 #define OUTPUT_SIGNAL_FILE      "signals.txt"
 #define OUTPUT_SIGNAL_MODE      0666
 
-static int _create_and_open_FIFO(int *fd);
-static void _close_files(int fifo, int out_data, int out_signals);
+/********************** internal data definition *****************************/
 
+/********************** internal functions declaration ************************/
+static void _close_files(int fd_fifo, int fd_out_data, int fd_out_signals);
+
+/********************** external functions definition ************************/
 int main(void) {
     pid_t pid = getpid();
     printf("Reader: My PID is %d\n", pid);
 
+    // Verify that the lengths of the data and signals headers match the expected length.
     if (strlen(DATA_HEADER) != HEADER_LENGHT || strlen(SIGNALS_HEADER) != HEADER_LENGHT) {
         printf("ERROR: header lenght\n");
         exit(EXIT_FAILURE);
     }
 
+    // Create and open the FIFO for reading.
     int fd_fifo; 
-    if (_create_and_open_FIFO(&fd_fifo)) {
+    if (create_and_open_FIFO(FIFO_NAME, FIFO_MODE, O_RDONLY, &fd_fifo)) {
         exit(EXIT_FAILURE);
     }
 
+    // Open the output data file for writing. Create it if it doesn't exist.
     int fd_out_data = open(OUTPUT_DATA_FILE, (O_CREAT | O_WRONLY), OUTPUT_DATA_MODE);
     if (fd_out_data == -1) {
         perror("Output open:");
@@ -38,6 +45,7 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
 
+    // Open the output signal file for writing. Create it if it doesn't exist.
     int fd_out_signal = open(OUTPUT_SIGNAL_FILE, (O_CREAT | O_WRONLY), OUTPUT_SIGNAL_MODE);
     if (fd_out_signal == -1) {
         perror("Signal open:");
@@ -55,6 +63,7 @@ int main(void) {
     ssize_t bytes_written;
 
     while (1) {
+        // Read data from the FIFO.
         bytes_read = read(fd_fifo, input_buf, input_buf_lenght-1);
         if (bytes_read == -1) {
             perror("FIFO read:");
@@ -65,7 +74,7 @@ int main(void) {
         }
         input_buf[bytes_read] = '\0';
 
-        
+        // Determine the output file based on the header.
         if (NULL == strncpy(input_header, input_buf, HEADER_LENGHT)) {
             printf("ERROR: header copy");
             _close_files(fd_fifo, fd_out_data, fd_out_signal);
@@ -83,9 +92,11 @@ int main(void) {
             exit(EXIT_FAILURE);
         }
 
+        // Set the output buffer for data.
         p_output_buf = input_buf + HEADER_LENGHT;
         output_buf_lenght = bytes_read - HEADER_LENGHT;
 
+        // Write the output data to the appropriate file.
         bytes_written = write(fd_output, p_output_buf, output_buf_lenght);
         if (bytes_written == -1) {
             perror("Write:");
@@ -98,26 +109,18 @@ int main(void) {
     exit(EXIT_SUCCESS);
 }
 
+/********************** internal functions declaration ***********************/
 
-static int _create_and_open_FIFO(int *fd) {
-    if (access(FIFO_NAME, F_OK) == -1) {
-        // If FIFO does not exist, create it
-        int fifo_status = mkfifo(FIFO_NAME, FIFO_MODE);
-        if (fifo_status == -1) {
-            perror("FIFO creation:");
-            return 1;
-        }
-    } 
-
-    *fd = open(FIFO_NAME, O_RDONLY);
-    if (*fd == -1) {
-        perror("FIFO open:");
-        return 1;
-    }
-
-    return 0;
-}
-
+/*
+ * Closes the specified file descriptors if they are valid (non-negative).
+ *
+ * @params 
+ *   fd_fifo - The file descriptor for the FIFO to be closed.
+ *   fd_out_data - The file descriptor for the output data file to be closed.
+ *   fd_out_signals - The file descriptor for the output signals file to be closed.
+ * @return 
+ *   None
+*/
 static void _close_files(int fd_fifo, int fd_out_data, int fd_out_signals) {
     if (fd_fifo >= 0) {
         close(fd_fifo);
