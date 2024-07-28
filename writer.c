@@ -9,9 +9,12 @@
 #include <unistd.h>
 #include "common.h"
 
+#define STR_OUTPUT_SIGNAL_SIGUSR1       "1\n"
+#define STR_OUTPUT_SINGAL_SIGUSR2       "2\n"
+
 static int _setup_signal_handler();
 static int _create_and_open_FIFO(int *fd);
-static int _max(int a, int b);
+static int _prepare_data_buffer(char *input_buf, char *header, char *output_buf);
 
 volatile sig_atomic_t g_signal_called = 0;
 
@@ -23,7 +26,12 @@ void sigint_handler(int sig) {
 
 int main(void) {
     pid_t pid = getpid();
-    printf("WRITER: My PID is %d\n", pid);  
+    printf("WRITER: My PID is %d\n", pid);
+
+    if (strlen(DATA_HEADER) != HEADER_LENGHT || strlen(SIGNALS_HEADER) != HEADER_LENGHT) {
+        printf("ERROR: header lenght\n");
+        exit(EXIT_FAILURE);
+    }
 
     if(_setup_signal_handler()){
         exit(EXIT_FAILURE);
@@ -34,18 +42,17 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
 
-    char buf[INPUT_DATA_LENGHT];
-    char data_buf[(_max(strlen(c_data_header), strlen(c_signals_header)) + INPUT_DATA_LENGHT)];
-    ssize_t bytes_written;
+    char input_buf[INPUT_DATA_LENGHT];
+    char output_buf[HEADER_LENGHT + INPUT_DATA_LENGHT];
+    char *p_output_header;
 
-    //TODO(lmeoli): ver bien que pasa con write cuando se cierra del otro lado
     while (1) {
-        char * p_error = fgets(buf, INPUT_DATA_LENGHT, stdin);
-        if (p_error == NULL) {
+        char * p_str_error = fgets(input_buf, INPUT_DATA_LENGHT, stdin);
+        if (p_str_error == NULL) {
             if (feof(stdin)) {
                 break;
             } else if (!g_signal_called) {
-                printf("Error: fgets");
+                printf("NULL Error: fgets");
                 close(fd_fifo);
                 exit(EXIT_FAILURE);
             }
@@ -55,23 +62,32 @@ int main(void) {
             int usr_signal = g_signal_called;
             g_signal_called = 0;
 
-            strcpy(data_buf, c_signals_header);
+            p_output_header = SIGNALS_HEADER;
+
+            char * p_str_signal_out;
             if (SIGUSR1 == usr_signal) {
-                strcat(data_buf, "1\n");
+                p_str_signal_out = STR_OUTPUT_SIGNAL_SIGUSR1;
             } else if (SIGUSR2 == usr_signal) {
-                strcat(data_buf, "2\n");
-            }   
+                p_str_signal_out = STR_OUTPUT_SINGAL_SIGUSR2;
+            }
+
+            if (NULL == strcpy(input_buf, p_str_signal_out)) {
+                close(fd_fifo);
+                exit(EXIT_FAILURE);
+            }
         } else {
-            // TODO:chequear valores
-            strcpy(data_buf, c_data_header);
-            strcat(data_buf, buf);
-            printf("Palabra recibida: %s", data_buf);
+            p_output_header = DATA_HEADER;
         }
 
-        //sigpipe y termina el programa
-        bytes_written = write(fd_fifo, data_buf, strlen(data_buf));
+        if (_prepare_data_buffer(input_buf, p_output_header, output_buf)) {
+            close(fd_fifo);
+            exit(EXIT_FAILURE);
+        } 
+
+        ssize_t bytes_written = write(fd_fifo, output_buf, strlen(output_buf));
         if (bytes_written == -1) {
             perror("FIFO write");
+            close(fd_fifo);
             exit(EXIT_FAILURE);
         } else if(bytes_written == 0) {
             printf("EOF");
@@ -81,7 +97,7 @@ int main(void) {
 
     close(fd_fifo);
 
-    return 0;
+    exit(EXIT_SUCCESS);
 }
 
 
@@ -123,6 +139,18 @@ static int _create_and_open_FIFO(int *fd) {
     return 0;
 }
 
-static int _max(int a, int b) {
-    return (a > b) ? a : b;
+static int _prepare_data_buffer(char *input_buf, char *header, char *output_buf) {
+    char *p_error = strcpy(output_buf, header);
+    if (p_error == NULL) {
+        printf("NULL Error: strcpy");
+        return 1;
+    }
+
+    p_error = strcat(output_buf, input_buf);
+    if (p_error == NULL) {
+        printf("NULL Error: strcat");
+        return 1;
+    }
+
+    return 0;
 }

@@ -7,11 +7,12 @@
 
 #define INPUT_DATA_LENGHT       10
 
+/*Both header must be the same size */
 #define DATA_HEADER             "DATA:"
 #define SIGNALS_HEADER          "SIGN:"
+#define HEADER_LENGHT           (sizeof(DATA_HEADER) - 1)
 
-const char c_data_header[] = DATA_HEADER;
-const char c_signals_header[] = SIGNALS_HEADER;
+int max(int a, int b);
 
 #endif // COMMON_H
 
