@@ -1,4 +1,5 @@
 /********************** inclusions *******************************************/
+#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -52,6 +53,7 @@ int main(void) {
     char input_buf[INPUT_DATA_LENGHT];
     char output_buf[HEADER_LENGHT + INPUT_DATA_LENGHT];
     char *p_output_header;
+    ssize_t bytes_written = 0;
 
     while (1) {
         // Read the input from stdin.
@@ -60,7 +62,7 @@ int main(void) {
             if (feof(stdin)) {
                 break;
             } else if (!g_signal_called) {
-                printf("NULL Error: fgets");
+                printf("NULL Error: fgets\n");
                 close(fd_fifo);
                 exit(EXIT_FAILURE);
             }
@@ -95,13 +97,16 @@ int main(void) {
         } 
 
         // Write the processed output data to the FIFO.
-        ssize_t bytes_written = write(fd_fifo, output_buf, strlen(output_buf));
+        bytes_written = write(fd_fifo, output_buf, strlen(output_buf));
         if (bytes_written == -1) {
             perror("FIFO write");
+            if (errno == EPIPE) {
+                printf("All readers are closed\n");
+            }
             close(fd_fifo);
             exit(EXIT_FAILURE);
         } else if(bytes_written == 0) {
-            printf("EOF");
+            printf("EOF\n");
             break;
         }
     }
@@ -138,6 +143,11 @@ static int _setup_signal_handler() {
 
     if (sigaction(SIGUSR2, &s_usr_sa, NULL) == -1) {
         perror("Sigaction:");
+        return 1;
+    }
+
+    if (sigaction(SIGPIPE, &s_usr_sa, NULL) == -1) {
+        perror("Sigaction");
         return 1;
     }
 
